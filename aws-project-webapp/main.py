@@ -81,13 +81,38 @@ def _create_instance():
     )
     return instance[0].id
 
+def _get_instances_count():
+    ec2_client = boto3.client('ec2')
+    response = ec2_client.describe_instances()
+    count = 0
+    for reservation in response["Reservations"]:
+        for instance in reservation["Instances"]:
+            count += 1
+    return count
+
+def _scaling_logic(messages_count):
+    instance_count = _get_instances_count()
+    # replace 'if' with 'while' in the later stages of development
+    count = 0
+    if instance_count < messages_count and instance_count < 20:
+        _create_instance()
+        count += 1
+    return count
 #********************************************************************
 # REST END POINTS
 #********************************************************************
+
+
+@app.route('/get_instance_count', methods=['GET'])
+def get_instance_count_response():
+    instance_count = _get_instances_count()
+    return jsonify(return_value = str(instance_count) + " instances running!")
+
+
 @app.route('/delete_queue_messages', methods=['GET'])
 def delete_queue_messages_response():
     deleted_message_approx_count = _delete_queue_messages()
-    return jsonify(return_value = "Approximately " + str(deleted_message_approx_count) + " messages delete!")
+    return jsonify(return_value = "Approximately " + str(max(deleted_message_approx_count - 10, 0)) + " to "+ str(max(deleted_message_approx_count, 10)) + " messages delete!")
 
 @app.route('/', methods=['GET'])
 def main_response():
@@ -98,13 +123,18 @@ def main_response():
         messages_count = _get_message_count(queue_client, queues['QueueUrls'][0])
         time.sleep(5)
         enqueue_response = queue_client.send_message(QueueUrl = queues['QueueUrls'][0], MessageBody='This is test message ' )
-        time.sleep(5)
+        time.sleep(25)
         messages_count += 1
     else:
         return jsonify(return_value = "Queue Not Found, Try again!") 
-     
+    
+    instances_created = _scaling_logic(messages_count)
+    
+    return_message = str(messages_count) + " messages in the Queue!"
+    if instances_created:
+        return_message += " Also created " + str(instances_created) + " instances."
 
-    return jsonify(return_value = messages_count) 
+    return jsonify(return_value = return_message) 
 
 if __name__ == "__main__":
     print("Loading!")
