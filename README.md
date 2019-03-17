@@ -14,4 +14,7 @@
 2. $ pipenv shell
 3. $ cd aws-project-webapp
 4. $ pip -r install requirements.txt
-5. supervisord -c supervisord.conf
+5. $ aws configure 
+> 5.1 provide your aws secret key and access key accordingly
+> 5.2 provide default region (we had it as us-west-1)
+6. supervisord -c supervisord.conf
