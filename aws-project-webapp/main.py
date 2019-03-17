@@ -16,7 +16,7 @@ app = Flask(__name__)
 def _create_queue():
     queue_client = boto3.client('sqs')
     # delete any previously existing queue with this name
-    queues = queue_client.list_queues(QueueNamePrefix='aws-project-queue')
+    queues = queue_client.list_queues(QueueNamePrefix = 'aws-project-queue')
     time.sleep(5)
     # trying to delete only if it exists
     if 'QueueUrls' in queues:
@@ -38,6 +38,29 @@ def _create_queue():
 #********************************************************************
 # UTILITY FUNCTIONS
 #********************************************************************
+def _delete_queue_messages():
+    queue_client = boto3.client('sqs')
+    queues = queue_client.list_queues(QueueNamePrefix = 'aws-project-queue')
+    time.sleep(5)
+    # if queue exists
+    count = 0
+    if 'QueueUrls' in queues:
+        while True:
+            # adjust MaxNumberOfMessages if needed
+            messages = queue_client.receive_message(QueueUrl = queues['QueueUrls'][0], MaxNumberOfMessages = 10) 
+            count += 10
+            # when the queue is exhausted, the response dict contains no 'Messages' key
+            if 'Messages' in messages: 
+                # 'Messages' is a list
+                for message in messages['Messages']: 
+                    # process the messages
+                    print(message['Body'])
+                    # next, we delete the message from the queue so no one else will process it again
+                    queue_client.delete_message(QueueUrl = queues['QueueUrls'][0],ReceiptHandle = message['ReceiptHandle'])
+            else:
+                print('Queue is now empty')
+                break
+    return count
 
 def _get_message_count(queue_client, queue_url):
     count = 0
@@ -61,6 +84,11 @@ def _create_instance():
 #********************************************************************
 # REST END POINTS
 #********************************************************************
+@app.route('/delete_queue_messages', methods=['GET'])
+def delete_queue_messages_response():
+    deleted_message_approx_count = _delete_queue_messages()
+    return jsonify(return_value = "Approximately " + str(deleted_message_approx_count) + " messages delete!")
+
 @app.route('/', methods=['GET'])
 def main_response():
     instance_id = 1#_create_instance()
@@ -70,6 +98,7 @@ def main_response():
         messages_count = _get_message_count(queue_client, queues['QueueUrls'][0])
         time.sleep(5)
         enqueue_response = queue_client.send_message(QueueUrl = queues['QueueUrls'][0], MessageBody='This is test message ' )
+        time.sleep(5)
         messages_count += 1
     else:
         return jsonify(return_value = "Queue Not Found, Try again!") 
