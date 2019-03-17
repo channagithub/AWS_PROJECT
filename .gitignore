@@ -1,3 +1,7 @@
 Pipfile
 
+# ignore log files
 *.log
+
+# ignore pid files
+*.pid
