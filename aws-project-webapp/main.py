@@ -47,10 +47,10 @@ def _delete_queue_messages():
     if 'QueueUrls' in queues:
         while True:
             # adjust MaxNumberOfMessages if needed
-            messages = queue_client.receive_message(QueueUrl = queues['QueueUrls'][0], MaxNumberOfMessages = 10) 
-            count += 10
+            messages = queue_client.receive_message(QueueUrl = queues['QueueUrls'][0], MaxNumberOfMessages = 1) 
             # when the queue is exhausted, the response dict contains no 'Messages' key
             if 'Messages' in messages: 
+                count += 1
                 # 'Messages' is a list
                 for message in messages['Messages']: 
                     # process the messages
@@ -98,6 +98,8 @@ def _scaling_logic(messages_count):
         _create_instance()
         count += 1
     return count
+
+
 #********************************************************************
 # REST END POINTS
 #********************************************************************
@@ -112,7 +114,8 @@ def get_instance_count_response():
 @app.route('/delete_queue_messages', methods=['GET'])
 def delete_queue_messages_response():
     deleted_message_approx_count = _delete_queue_messages()
-    return jsonify(return_value = "Approximately " + str(max(deleted_message_approx_count - 10, 0)) + " to "+ str(max(deleted_message_approx_count, 10)) + " messages delete!")
+    # return jsonify(return_value = "Approximately " + str(max(deleted_message_approx_count - 10, 0)) + " to "+ str(max(deleted_message_approx_count, 10)) + " messages delete!")
+    return jsonify(return_value = str(deleted_message_approx_count) + " messages deleted!")
 
 @app.route('/', methods=['GET'])
 def main_response():
