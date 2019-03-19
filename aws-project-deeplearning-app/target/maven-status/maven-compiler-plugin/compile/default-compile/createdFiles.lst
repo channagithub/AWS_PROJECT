@@ -1,0 +1,3 @@
+com\cloud\cloud_aws.class
+com\cloud\createFolder.class
+com\cloud\stopEC2Instance.class
