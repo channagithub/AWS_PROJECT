@@ -5,3 +5,6 @@ Pipfile
 
 # ignore pid files
 *.pid
+
+# ignore jar files
+*.jar
