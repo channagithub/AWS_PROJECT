@@ -70,10 +70,10 @@ def _get_message_count(queue_url = 'https://sqs.us-west-1.amazonaws.com/13883816
 def _create_instance():
     ec2 = boto3.resource('ec2')
     user_data_script = """java -cp /home/ubuntu/darknet/deeplearning.jar com.cloud.CloudAWS"""
-    # user_data_script ="""#!/bin/bash
-    #     echo "Hello World" >> /tmp/data.txt"""
+    user_data_script = """#!/bin/bash 
+    /home/ubuntu/darknet/java_script.sh"""
     instance = ec2.create_instances(
-        ImageId = 'ami-0e355297545de2f82',
+        ImageId = 'ami-0d3d75415da9089c0',
         MinCount = 1,
         MaxCount = 1,
         InstanceType = 't2.micro',
@@ -111,6 +111,19 @@ def _scaling_logic(messages_count):
         count += 1
     return count
 
+def _get_file_contents_from_s3(file_name, bucket_name = 'clouddeeplearning'):
+    s3 = boto3.resource('s3')
+    bucket = s3.Bucket(bucket_name)
+    body = ""
+    for obj in bucket.objects.all():
+        key = obj.key
+        if key.endswith(file_name):
+            body = obj.get()['Body'].read()
+            break
+    if body: 
+        body = body.decode("utf-8")
+        body = body[1:-1]
+    return body
 
 #********************************************************************
 # REST END POINTS
@@ -140,7 +153,8 @@ def main_response():
     queues = queue_client.list_queues(QueueNamePrefix='aws-project-queue')
     if 'QueueUrls' in queues and queues['QueueUrls']:
         messages_count = _get_message_count(queues['QueueUrls'][0])
-        enqueue_response = queue_client.send_message(QueueUrl = queues['QueueUrls'][0], MessageBody = datetime.utcnow().strftime('%Y-%m-%d-%H-%M-%S-%f'))
+        file_name = datetime.utcnow().strftime('%Y-%m-%d-%H-%M-%S-%f')
+        enqueue_response = queue_client.send_message(QueueUrl = queues['QueueUrls'][0], MessageBody = file_name)
         messages_count += 1
     else:
         return jsonify(return_value = "Queue Not Found, Try again!") 
@@ -150,8 +164,17 @@ def main_response():
     return_message = str(messages_count) + " messages in the Queue!"
     if instances_created:
         return_message += " Also created " + str(instances_created) + " instances."
-
-    return jsonify(return_value = return_message) 
+   
+    # considering video detection deeplearning model will run for at least 30 seconds
+    time.sleep(30)
+    file_contents = _get_file_contents_from_s3(file_name, bucket_name = "clouddeeplearning")
+    while not file_contents:
+        time.sleep(1)
+        file_contents = _get_file_contents_from_s3(file_name, bucket_name = "clouddeeplearning")
+   
+    return_obj = {"message": return_message, "detected_object": file_contents.strip()}
+    
+    return jsonify(return_value = return_obj) 
 
 if __name__ == "__main__":
     print("Loading!")
