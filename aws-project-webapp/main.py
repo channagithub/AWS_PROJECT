@@ -6,7 +6,7 @@ from flask import jsonify
 from joblib import load
 import boto3
 import time
-
+from datetime import datetime
 app = Flask(__name__)
 
 
@@ -62,31 +62,43 @@ def _delete_queue_messages():
                 break
     return count
 
-def _get_message_count(queue_client, queue_url):
-    count = 0
-    response = queue_client.receive_message(QueueUrl=queue_url)
-    while 'Messages' in response:
-        count += 1
-        response = queue_client.receive_message(QueueUrl=queue_url)
-    return count
+def _get_message_count(queue_url = 'https://sqs.us-west-1.amazonaws.com/138838165366/aws-project-queue'):
+    client = boto3.client('sqs')
+    response = client.get_queue_attributes(QueueUrl = queue_url, AttributeNames=['ApproximateNumberOfMessages'])
+    return int(response['Attributes']['ApproximateNumberOfMessages'])
 
 def _create_instance():
     ec2 = boto3.resource('ec2')
+    user_data_script = """java -cp /home/ubuntu/darknet/deeplearning.jar com.cloud.CloudAWS"""
+    # user_data_script ="""#!/bin/bash
+    #     echo "Hello World" >> /tmp/data.txt"""
     instance = ec2.create_instances(
         ImageId = 'ami-0e355297545de2f82',
         MinCount = 1,
         MaxCount = 1,
         InstanceType = 't2.micro',
-        KeyName = 'aws-project-ec2-keypair', 
+        KeyName = 'aws-project-ec2-keypair',
+        SecurityGroupIds = ['sg-05dd11dc93caae569'],
+        TagSpecifications = [
+                {
+                        'ResourceType': 'instance',
+                        'Tags': [
+                                 {
+                                         'Key': 'Name',
+                                         'Value': 'elastic-instance'
+                                 },
+                         ]
+                }],
+        UserData = user_data_script
     )
     return instance[0].id
 
 def _get_instances_count():
-    ec2_client = boto3.client('ec2')
-    response = ec2_client.describe_instances()
+    ec2_client = boto3.resource('ec2')
+    instances = ec2_client.instances.filter()
     count = 0
-    for reservation in response["Reservations"]:
-        for instance in reservation["Instances"]:
+    for instance in instances:
+        if instance.state["Name"] == "running":
             count += 1
     return count
 
@@ -104,6 +116,10 @@ def _scaling_logic(messages_count):
 # REST END POINTS
 #********************************************************************
 
+@app.route('/get_message_count', methods=['GET'])
+def get_message_count_response():
+    message_count = _get_message_count()
+    return jsonify(return_value = "Approximately " + str(message_count) + " messages in the Queue!")
 
 @app.route('/get_instance_count', methods=['GET'])
 def get_instance_count_response():
@@ -123,10 +139,8 @@ def main_response():
     queue_client = boto3.client('sqs')
     queues = queue_client.list_queues(QueueNamePrefix='aws-project-queue')
     if 'QueueUrls' in queues and queues['QueueUrls']:
-        messages_count = _get_message_count(queue_client, queues['QueueUrls'][0])
-        time.sleep(5)
-        enqueue_response = queue_client.send_message(QueueUrl = queues['QueueUrls'][0], MessageBody='This is test message ' )
-        time.sleep(25)
+        messages_count = _get_message_count(queues['QueueUrls'][0])
+        enqueue_response = queue_client.send_message(QueueUrl = queues['QueueUrls'][0], MessageBody = datetime.utcnow().strftime('%Y-%m-%d-%H-%M-%S-%f'))
         messages_count += 1
     else:
         return jsonify(return_value = "Queue Not Found, Try again!") 
