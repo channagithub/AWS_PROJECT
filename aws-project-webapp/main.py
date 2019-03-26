@@ -7,6 +7,7 @@ from joblib import load
 import boto3
 import time
 from datetime import datetime
+from random import randint
 app = Flask(__name__)
 
 
@@ -106,9 +107,16 @@ def _scaling_logic(messages_count):
     instance_count = _get_instances_count()
     # replace 'if' with 'while' in the later stages of development
     count = 0
-    if instance_count < messages_count and instance_count < 20:
-        _create_instance()
-        count += 1
+    while instance_count - 1 < messages_count and instance_count < 20:
+    # if instance_count < messages_count and instance_count < 20:
+        try:
+            _create_instance()
+            instance_count += 1
+            count += 1
+        except Exception as e:
+            instance_count = _get_instances_count()
+            messages_count = _get_message_count()
+
     return count
 
 def _get_file_contents_from_s3(file_name, bucket_name = 'clouddeeplearning'):
@@ -154,6 +162,7 @@ def main_response():
     if 'QueueUrls' in queues and queues['QueueUrls']:
         messages_count = _get_message_count(queues['QueueUrls'][0])
         file_name = datetime.utcnow().strftime('%Y-%m-%d-%H-%M-%S-%f')
+        file_name += '-' + str(randint(0, 9000000000000))
         enqueue_response = queue_client.send_message(QueueUrl = queues['QueueUrls'][0], MessageBody = file_name)
         messages_count += 1
     else:
