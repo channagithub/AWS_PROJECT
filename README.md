@@ -1,4 +1,4 @@
-# AWS_PROJECT
+# Object Detection in video as a Service
 
 ### Steps to run on Ubuntu
 ###### Setup 0.1
